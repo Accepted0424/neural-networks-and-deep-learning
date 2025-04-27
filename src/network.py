@@ -16,7 +16,9 @@ import time
 
 # Third-party libraries
 import numpy as np
+import matplotlib.pyplot as plt
 
+import mnist_loader
 
 class Network(object):
 
@@ -36,6 +38,7 @@ class Network(object):
         self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
         self.weights = [np.random.randn(y, x)
                         for x, y in zip(sizes[:-1], sizes[1:])]
+        self.gradient_norms = []
 
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
@@ -56,19 +59,24 @@ class Network(object):
         if test_data: n_test = len(test_data)
         n = len(training_data)
         for j in range(epochs):
+            nabla_b = [np.zeros(b.shape) for b in self.biases]
+            nabla_w = [np.zeros(w.shape) for w in self.weights]
             time1 = time.time()
             random.shuffle(training_data)
             mini_batches = [
                 training_data[k:k+mini_batch_size]
                 for k in range(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
-                self.update_mini_batch(mini_batch, eta)
+                nabla_b, nabla_w = self.update_mini_batch(mini_batch, eta)
+            layer_norms = [np.linalg.norm(nb) for nb in nabla_b]
+            self.gradient_norms.append(layer_norms)
             time2 = time.time()
             if test_data:
                 print("Epoch {0}: {1} / {2}, took {3:.2f} seconds".format(
                     j, self.evaluate(test_data), n_test, time2-time1))
             else:
                 print("Epoch {0} complete in {1:.2f} seconds".format(j, time2-time1))
+        self.draw_gradient_norms()
 
     def update_mini_batch(self, mini_batch, eta):
         """Update the network's weights and biases by applying
@@ -85,6 +93,7 @@ class Network(object):
                         for w, nw in zip(self.weights, nabla_w)]
         self.biases = [b-(eta/len(mini_batch))*nb
                        for b, nb in zip(self.biases, nabla_b)]
+        return nabla_b, nabla_w
 
     def backprop(self, x, y):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
@@ -134,6 +143,15 @@ class Network(object):
         """Return the vector of partial derivatives \partial C_x /
         \partial a for the output activations."""
         return (output_activations-y)
+    
+    def draw_gradient_norms(self):
+        """Plot the gradient norms for each layer."""
+        for layer_idx in range(len(self.gradient_norms[0])):
+            plt.plot([epoch[layer_idx] for epoch in self.gradient_norms], label=f'Layer {layer_idx}')
+        plt.xlabel('Epoch')
+        plt.ylabel('Gradient Norm')
+        plt.legend()
+        plt.show()
 
 #### Miscellaneous functions
 def sigmoid(z):
@@ -143,3 +161,9 @@ def sigmoid(z):
 def sigmoid_prime(z):
     """Derivative of the sigmoid function."""
     return sigmoid(z)*(1-sigmoid(z))
+
+if __name__ == "__main__":
+    training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
+    net = Network([784, 30, 10])
+    net.SGD(training_data, epochs=100, mini_batch_size=10,
+            eta=10.0, test_data=test_data)
